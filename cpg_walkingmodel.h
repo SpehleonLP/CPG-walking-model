@@ -64,8 +64,22 @@ void PD_ModelLerp(PD_Model * dst, PD_Model const* src0, PD_Model const* src1, fl
 
 // helper functions to compute weight on each foot 
 // returns total mass
-float CPG_GetCenterOfGravity(float * dst_xyz, float * xyz, float * mass, int size);
+float CPG_GetCenterOfGravity(float *__restrict dst_xyz, float const*__restrict xyz, float const*__restrict mass, int size);
+/// xyz is interpreted as an array of bytes with points at offset 
+/// float[3] * point = xyz + stride*point_no
+float CPG_GetCenterOfGravity_Stride(float *__restrict dst_xyz, char const*__restrict xyz, int stride, float const*__restrict mass, int size);
+
 float CPG_ComputeHalfLife(float percent_remaining, float time);
+
+/// the moment of inertia matrix is symetrical
+/// meaning row major/column major is irrelevant. 
+/// each point is considered a vertex; e.g. for a solid sphere premultiply mass array by 2/3
+float CPG_ComputeMomentOfInertiaMat3(float *__restrict mat3x3_out, float const*__restrict center_of_graivty_xyz, float const*__restrict xyz, float const*__restrict mass, int size);
+
+/// xyz is interpreted as an array of bytes with points at offset 
+/// float[3] * point = xyz + stride*point_no
+float CPG_ComputeMomentOfInertiaMat3_Stride(float *__restrict mat3x3_out, float const*__restrict center_of_graivty_xyz, char const*__restrict xyz, int stride, float const*__restrict mass, int size);
+
 
 struct CPG_constants
 {

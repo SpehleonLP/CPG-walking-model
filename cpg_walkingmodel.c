@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 
 void CPG_Update(CPG_Model * model, float dt);
 
@@ -44,7 +45,7 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 	r->settings.ipsilateral_inhibition		= 0.8;		
 	r->settings.sensory_inhibition			= 2.0;
 	
-	r->settings.foot_feedback_constant		= 0.08;	
+	r->settings.foot_feedback_constant		= 7.0 * 0.08;	
 	r->settings.hip_feedback_constant		= 3.0;	
 	
 	r->drivers.unit[PD_Swing][PD_Hip].target		= 1.312;	
@@ -82,24 +83,37 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 	*/
 	assert((uint8_t*)r->legState + (noLegs) < (uint8_t*)r + size);
 	
-	fclose(fopen("cpg_test_data.txt", "w"));
+// set everything to stance	
+	memset(r->legState, PD_Stance, noLegs);
+// set knees to half extension
+	for(int i = 0; i < noLegs; ++i)
+	{
+		r->segments[i/2].leg[i&1].hip.pos = 0.262;
+		r->segments[i/2].leg[i&1].knee.pos = r->drivers.unit[PD_Stance][PD_Knee].target;
+	}
+	
+	//fclose(fopen("cpg_test_data.txt", "w"));
 	
 	return r;
 }
 
 void CPG_ModelUpdate(CPG_Model * model, float dt)
 {		
+	dt*=2;
 	int noLegs =  model->noSegments*2;
 	struct CPG_Leg * legs = &model->segments->leg[0];
 
-	float tick_rate = 0.5;
+	float tick_rate = 0.1;
 #if 1
 	if((model->biotick += dt) > tick_rate)
 	{
-		do
-		{
+	//	do
+	//	{
 			CPG_Update(model, tick_rate);
-		} while((model->biotick -= tick_rate) > tick_rate); 
+	//	} while((model->biotick -= tick_rate) > tick_rate); 	
+		
+			model->biotick = 0;
+		memset(model->contact_force, 0, sizeof(float)*model->noLegs);
 #if 1
 		for(int i = 0; i < noLegs; ++i)
 		{
@@ -222,8 +236,13 @@ void PD_ModelLerp(PD_Model * dst, PD_Model const* src0, PD_Model const* src1, fl
 	}
 }
 
+/// If optimized further than this the algorithm no longer works
+/// its not like game of life where everything computes at once
+/// the algorithm relies on i being computed before i+1
+/// so SIMD just breaks it.
+
 void CPG_Update(CPG_Model * model, float dt)
-{
+{	
 	CPG_constants const* constants = &model->settings;
 	CPG_neuron * neurons = model->neurons;
 	float * weight_on_foot = model->contact_force;
@@ -232,7 +251,7 @@ void CPG_Update(CPG_Model * model, float dt)
 	
 	static float total_time = 0;
 	total_time += dt;
-		
+	
 	float state_memory_constant = pow(0.5, dt / constants->state_memory_half_life);	
 	float fatigue_memory_constant = pow( 0.5,  dt / constants->fatigue_memory_half_life);
 	
@@ -311,6 +330,8 @@ void CPG_Update(CPG_Model * model, float dt)
 		neurons[i].fatigue  = fatigue_memory_constant * neurons[i].fatigue + neurons[i].output;
 		neurons[i].output   = state * (state > 0);
 	}
+	
+	
 #if 0
 	FILE *fp = fopen("cpg_test_data.txt", "a");
 	
@@ -363,7 +384,7 @@ void CPG_Update(CPG_Model * model, float dt)
 }
 
 
-float CPG_GetCenterOfGravity(float * dst, float * xyz, float * mass, int size)
+float CPG_GetCenterOfGravity(float *__restrict dst, float const*__restrict xyz, float const*__restrict mass, int size)
 {
 	float accumulator[3] = {0, 0, 0};
 	float total_mass = 0;
@@ -385,7 +406,169 @@ float CPG_GetCenterOfGravity(float * dst, float * xyz, float * mass, int size)
 	return total_mass;
 }
 
+float CPG_GetCenterOfGravity_Stride(float *__restrict dst, char const*__restrict xyz, int stride, float const*__restrict mass, int size)
+{
+	float accumulator[3] = {0, 0, 0};
+	float total_mass = 0;
+	
+	for(int i = 0; i < size; ++i)
+	{
+		float * p = (float*)(xyz + stride*i);
+		
+		accumulator[0] += p[0] * mass[i];
+		accumulator[1] += p[1] * mass[i];
+		accumulator[2] += p[2] * mass[i];
+		total_mass += mass[i];
+	}
+	
+	float invMass = total_mass? 1.f / total_mass : 1.f;
+	
+	dst[0] = accumulator[0] * invMass;	
+	dst[1] = accumulator[1] * invMass;	
+	dst[2] = accumulator[2] * invMass;
+		
+	return total_mass;
+}
+
 float CPG_ComputeHalfLife(float percent_remaining, float time)
 {
 	return time / log2(percent_remaining) / -1.f;
+}
+
+
+float CPG_ComputeMomentOfInertiaMat3(float *__restrict mat3_out, float const*__restrict center_of_graivty_xyz, float const*__restrict xyz, float const*__restrict mass, int size)
+{	
+	float mat3[3][3];
+	float r = 0;
+	
+	if(center_of_graivty_xyz == NULL || xyz == NULL || mass == NULL)
+	{
+		if(mat3_out)
+			memset(mat3_out, 0, sizeof(mat3));
+		
+		return 0.f;
+	}
+	
+	if(mat3_out == NULL)
+	{
+		for(int i = 0; i < size; ++i)
+		{
+			float d[3] = {
+				xyz[i*3+0] - center_of_graivty_xyz[0], 
+				xyz[i*3+1] - center_of_graivty_xyz[1], 
+				xyz[i*3+2] - center_of_graivty_xyz[2]
+			};
+			
+			float length2 = d[0]*d[0] + d[1]*d[1] + d[2]*d[2];
+			r += length2 * mass[i];			
+		}
+	}
+	else
+	{
+		memset(mat3, 0, sizeof(mat3));
+		
+		for(int i = 0; i < size; ++i)
+		{
+			float d[3] = {
+				xyz[i*3+0] - center_of_graivty_xyz[0], 
+				xyz[i*3+1] - center_of_graivty_xyz[1], 
+				xyz[i*3+2] - center_of_graivty_xyz[2]
+			};
+			
+			float length2 = d[0]*d[0] + d[1]*d[1] + d[2]*d[2];
+			r += length2 * mass[i];		
+			
+			// unroll loop for better optimization
+			d[0] = fabs(d[0]);			
+			d[1] = fabs(d[1]);			
+			d[2] = fabs(d[2]);
+
+// unroll loop for better optimization
+			mat3[0][0] += (d[1]*d[1] + d[2]*d[2]) * mass[i];
+			mat3[0][1] -= d[0]*d[1] * mass[i];
+			mat3[0][2] -= d[0]*d[2] * mass[i];
+			mat3[1][0] -= d[1]*d[0] * mass[i];
+			mat3[1][1] += (d[0]*d[0] + d[2]*d[2]) * mass[i];
+			mat3[1][2] -= d[1]*d[2] * mass[i];
+			mat3[2][0] -= d[2]*d[0] * mass[i];
+			mat3[2][1] -= d[2]*d[1] * mass[i];
+			mat3[2][2] += (d[0]*d[0] + d[1]*d[1]) * mass[i];
+		}
+	}
+
+	
+	if(mat3_out)
+		memcpy(mat3_out, &mat3[0][0], 9*sizeof(float));	
+
+	return r;
+}
+
+float CPG_ComputeMomentOfInertiaMat3_Stride(float *__restrict mat3_out, float const*__restrict center_of_graivty_xyz, char const*__restrict xyz, int stride, float const*__restrict mass, int size)
+{
+	float mat3[3][3];
+	float r = 0;
+	
+	if(center_of_graivty_xyz == NULL || xyz == NULL || mass == NULL)
+	{
+		if(mat3_out)
+			memset(mat3_out, 0, sizeof(mat3));
+		
+		return 0.f;
+	}
+	
+	if(mat3_out == NULL)
+	{
+		for(int i = 0; i < size; ++i)
+		{
+			float * p = (float*)(xyz + stride*i);
+			
+			float d[3] = {
+				p[0] - center_of_graivty_xyz[0], 
+				p[1] - center_of_graivty_xyz[1], 
+				p[2] - center_of_graivty_xyz[2]
+			};
+			
+			float length2 = d[0]*d[0] + d[1]*d[1] + d[2]*d[2];
+			r += length2 * mass[i];			
+		}
+	}
+	else
+	{
+		memset(mat3, 0, sizeof(mat3));
+		
+		for(int i = 0; i < size; ++i)
+		{
+			float * p = (float*)(xyz + stride*i);
+			
+			float d[3] = {
+				p[0] - center_of_graivty_xyz[0], 
+				p[1] - center_of_graivty_xyz[1], 
+				p[2] - center_of_graivty_xyz[2]
+			};
+			
+			float length2 = d[0]*d[0] + d[1]*d[1] + d[2]*d[2];
+			r += length2 * mass[i];		
+			
+			d[0] = fabs(d[0]);			
+			d[1] = fabs(d[1]);			
+			d[2] = fabs(d[2]);
+
+// unroll loop for better optimization
+			mat3[0][0] += (d[1]*d[1] + d[2]*d[2]) * mass[i];
+			mat3[0][1] -= d[0]*d[1] * mass[i];
+			mat3[0][2] -= d[0]*d[2] * mass[i];
+			mat3[1][0] -= d[1]*d[0] * mass[i];
+			mat3[1][1] += (d[0]*d[0] + d[2]*d[2]) * mass[i];
+			mat3[1][2] -= d[1]*d[2] * mass[i];
+			mat3[2][0] -= d[2]*d[0] * mass[i];
+			mat3[2][1] -= d[2]*d[1] * mass[i];
+			mat3[2][2] += (d[0]*d[0] + d[1]*d[1]) * mass[i];
+		}
+	}
+
+	
+	if(mat3_out)
+		memcpy(mat3_out, &mat3[0][0], 9*sizeof(float));	
+
+	return r;	
 }
