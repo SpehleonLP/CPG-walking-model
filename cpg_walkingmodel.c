@@ -56,11 +56,11 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 	r->drivers.unit[PD_Stance][PD_Hip].proportional = 8.13;
 	r->drivers.unit[PD_Stance][PD_Hip].derivative	= 1;
 	
-	r->drivers.unit[PD_Swing][PD_Knee].target		= 0.57;	
+	r->drivers.unit[PD_Swing][PD_Knee].target		= 0.5;	
 	r->drivers.unit[PD_Swing][PD_Knee].proportional = 1.860;
 	r->drivers.unit[PD_Swing][PD_Knee].derivative	= 0.40;
 	
-	r->drivers.unit[PD_Stance][PD_Knee].target		= 1.30;	
+	r->drivers.unit[PD_Stance][PD_Knee].target		= 1.00;	
 	r->drivers.unit[PD_Stance][PD_Knee].proportional= 1.970;
 	r->drivers.unit[PD_Stance][PD_Knee].derivative	= 0.40;
 	
@@ -103,7 +103,7 @@ void CPG_ModelUpdate(CPG_Model * model, float dt)
 	int noLegs =  model->noSegments*2;
 	struct CPG_Leg * legs = &model->segments->leg[0];
 
-	float tick_rate = 0.1;
+	float tick_rate = 0.5;
 #if 1
 	if((model->biotick += dt) > tick_rate)
 	{
