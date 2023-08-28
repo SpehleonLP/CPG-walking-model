@@ -9,6 +9,11 @@
 
 void CPG_Update(CPG_Model * model, float dt);
 
+#ifndef M_PI
+#define M_PI 3.14159265358
+#endif
+#define M_2PI (2*M_PI)
+
 struct CPG_neuron
 {
 	float state;
@@ -35,13 +40,13 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 //	r->settings.fatigue_memory_constant		= 0.6; 
 //	r->settings.brain_signal_strength		= 1.71;
 	
-	r->settings.state_memory_half_life		= CPG_ComputeHalfLife(0.0473, 0.1);		
+	r->settings.state_memory_half_life		= CPG_ComputeHalfLife(0.473, 0.1);		
 	r->settings.fatigue_memory_half_life	= CPG_ComputeHalfLife(0.6, 0.1);	
 	
 	r->settings.brain_signal_strength		= 1.71;
 	
 	r->settings.recurrent_inhibition		= 3.0;	
-	r->settings.contralateral_inhibition	= 0.3;	
+	r->settings.contralateral_inhibition	= 3.0;	
 	r->settings.ipsilateral_inhibition		= 0.8;		
 	r->settings.sensory_inhibition			= 2.0;
 	
@@ -58,11 +63,11 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 	
 	r->drivers.unit[PD_Swing][PD_Knee].target		= 0.5;	
 	r->drivers.unit[PD_Swing][PD_Knee].proportional = 1.860;
-	r->drivers.unit[PD_Swing][PD_Knee].derivative	= 0.40;
+	r->drivers.unit[PD_Swing][PD_Knee].derivative	= 0.040;
 	
 	r->drivers.unit[PD_Stance][PD_Knee].target		= 1.00;	
 	r->drivers.unit[PD_Stance][PD_Knee].proportional= 1.970;
-	r->drivers.unit[PD_Stance][PD_Knee].derivative	= 0.40;
+	r->drivers.unit[PD_Stance][PD_Knee].derivative	= 0.040;
 	
 	*(int*)&r->noSegments = noSegments;	
 	*(int*)&r->noNeurons = noNeurons;
@@ -167,19 +172,37 @@ void CPG_ModelUpdate(CPG_Model * model, float dt)
 		float d_knee_error = (knee_error - p_knee_error) * invDt;
 		
 		float hip_pd = model->drivers.unit[s][PD_Hip].proportional   * (hip_error  + model->drivers.unit[s][PD_Hip].derivative * d_hip_error);		
-		float knee_pd = model->drivers.unit[s][PD_Knee].proportional * (knee_error + model->drivers.unit[s][PD_Knee].derivative * d_knee_error);
-		
+		float knee_pd = model->drivers.unit[s][PD_Knee].proportional * (knee_error + model->drivers.unit[s][PD_Knee].derivative * d_knee_error);	
+			
 		legs[i].hip.p_pos = legs[i].hip.pos;		
 		legs[i].knee.p_pos = legs[i].knee.pos;
+
+		float hip_acceleration = (hip_pd - legs[i].hip.velocity) * halfDt;
+		float knee_acceleration = (knee_pd - legs[i].knee.velocity) * halfDt;
 		
-		legs[i].hip.velocity += hip_pd * halfDt;		
-		legs[i].knee.velocity += knee_pd * halfDt;	
+		legs[i].hip.velocity += hip_acceleration;		
+		legs[i].knee.velocity += knee_acceleration;	
 		
 		legs[i].hip.pos  += legs[i].hip.velocity * dt;
 		legs[i].knee.pos += legs[i].knee.velocity * dt;	
 		
-		legs[i].hip.velocity += hip_pd * halfDt;		
-		legs[i].knee.velocity += knee_pd * halfDt;	
+		legs[i].hip.velocity += hip_acceleration;		
+		legs[i].knee.velocity += knee_acceleration;	
+		
+		float n_hip_error = model->drivers.unit[s][PD_Hip].target	- legs[i].hip.pos;
+		float n_knee_error = model->drivers.unit[s][PD_Knee].target - legs[i].knee.pos;
+		
+		if(n_hip_error * hip_error <= 0)
+		{
+			legs[i].hip.pos = model->drivers.unit[s][PD_Hip].target;
+			legs[i].hip.velocity = 0;
+		}
+		
+		if(n_knee_error * knee_error <= 0)
+		{
+			legs[i].knee.pos = model->drivers.unit[s][PD_Knee].target;
+			legs[i].knee.velocity = 0;
+		}
 		
 	//	if(i == 1)
 	//	fprintf(fp, "%f\t%f\t%f\t%f\t%f", legs[i].hip.pos, legs[i].hip.velocity, hip_error, d_hip_error, hip_pd);
@@ -241,6 +264,8 @@ void PD_ModelLerp(PD_Model * dst, PD_Model const* src0, PD_Model const* src1, fl
 /// the algorithm relies on i being computed before i+1
 /// so SIMD just breaks it.
 
+#define MULTILEG 0
+
 void CPG_Update(CPG_Model * model, float dt)
 {	
 	CPG_constants const* constants = &model->settings;
@@ -254,9 +279,16 @@ void CPG_Update(CPG_Model * model, float dt)
 	
 	float state_memory_constant = pow(0.5, dt / constants->state_memory_half_life);	
 	float fatigue_memory_constant = pow( 0.5,  dt / constants->fatigue_memory_half_life);
+
+	
+// FIRST LOOP IS EXTENSOR; if output enter stance
+// extensor 1.0 + flexor 0.0 = PD_Stance
+// extensor 0.0 + flexor 1.0 = PD_Swing
 	
 //	float state_memory_constant = constants->state_memory_half_life;	
 //	float fatigue_memory_constant = constants->fatigue_memory_half_life;
+	
+	fprintf(stdout, "\n");
 	
 	for(int i = 0; i < model->noNeurons; i += 2)
 	{
@@ -265,14 +297,14 @@ void CPG_Update(CPG_Model * model, float dt)
 		int opposite_neuron = side? i - 2 : i + 2;
 		
 		float inhibition = 0;
-		float excitation = 0; 
 		
 		// extension and flexation inhibit each other within the same CPG unit
 		inhibition = constants->sensory_inhibition * neurons[i+1].output;		
 		
 		// flexation laterally inhibits flexation		
+
 		inhibition += constants->contralateral_inhibition * neurons[opposite_neuron].output;
-		 
+#if MULTILEG		 
 		if(segment != 0)
 		{
 			inhibition += constants->ipsilateral_inhibition * neurons[i-4].output;
@@ -281,19 +313,25 @@ void CPG_Update(CPG_Model * model, float dt)
 		{
 			inhibition += constants->ipsilateral_inhibition * neurons[i+4].output;
 		}
+#endif
 		
 		inhibition += constants->recurrent_inhibition * neurons[i].fatigue;
 		
-		excitation = constants->brain_signal_strength;
+		float error = fabs(legs[i/2].hip.pos - model->drivers.unit[PD_Swing][PD_Hip].target);
+		inhibition += error * constants->hip_feedback_constant;
 		
-		excitation += legs[i/2].hip.pos * constants->hip_feedback_constant;
-		float state = state_memory_constant * neurons[i].state + (excitation - inhibition);
+//		excitation += legs[i/2].hip.pos * constants->hip_feedback_constant;
+		float state = state_memory_constant * neurons[i].state + (1.0 - inhibition);
+		
+		fprintf(stdout, "%f\t", state);
 		
 		neurons[i].state 	= state;
 		neurons[i].fatigue  = fatigue_memory_constant * neurons[i].fatigue + neurons[i].output;
 		neurons[i].output   = state * (state > 0);
 	}
 	
+	
+// FIRST LOOP IS FLEXOR	 if output enter swing
 	for(int i = 1; i < model->noNeurons; i += 2)
 	{
 		int segment = i / 4;
@@ -301,14 +339,14 @@ void CPG_Update(CPG_Model * model, float dt)
 		int opposite_neuron = side? i - 2 : i + 2;
 		
 		float inhibition = 0;
-		float excitation = 0; 
 		
 		// extension and flexation inhibit each other within the same CPG unit
 		inhibition = constants->sensory_inhibition * neurons[i-1].output;		
 		
 		// flexation laterally inhibits flexation		
 		inhibition += constants->contralateral_inhibition * neurons[opposite_neuron].output;
-		 
+		
+#if MULTILEG
 		if(segment != 0)
 		{
 			inhibition += constants->ipsilateral_inhibition * neurons[i-4].output;
@@ -317,14 +355,17 @@ void CPG_Update(CPG_Model * model, float dt)
 		{
 			inhibition += constants->ipsilateral_inhibition * neurons[i+4].output;
 		}
+#endif
 		
 		inhibition += constants->recurrent_inhibition * neurons[i].fatigue;
-		excitation = constants->brain_signal_strength;
 		
-		inhibition += legs[i/2].hip.pos *-constants->hip_feedback_constant;
-		excitation += weight_on_foot[i/2] * constants->foot_feedback_constant;
+		float error = fabs(legs[i/2].hip.pos - model->drivers.unit[PD_Stance][PD_Hip].target);
 		
-		float state = state_memory_constant * neurons[i].state + (excitation - inhibition);
+		inhibition += error * constants->hip_feedback_constant;
+		
+		float state = state_memory_constant * neurons[i].state + (1.0 - inhibition);
+		
+		fprintf(stdout, "%f\t", state);
 		
 		neurons[i].state 	= state;
 		neurons[i].fatigue  = fatigue_memory_constant * neurons[i].fatigue + neurons[i].output;
