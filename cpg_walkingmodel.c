@@ -40,8 +40,8 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 //	r->settings.fatigue_memory_constant		= 0.6; 
 //	r->settings.brain_signal_strength		= 1.71;
 	
-	r->settings.state_memory_half_life		= CPG_ComputeHalfLife(0.473, 0.1);		
-	r->settings.fatigue_memory_half_life	= CPG_ComputeHalfLife(0.6, 0.1);	
+	r->settings.state_memory_half_life		= CPG_ComputeHalfLife(0.473, 0.5);		
+	r->settings.fatigue_memory_half_life	= CPG_ComputeHalfLife(0.6, 0.5);	
 	
 	r->settings.brain_signal_strength		= 1.71;
 	
@@ -264,7 +264,7 @@ void PD_ModelLerp(PD_Model * dst, PD_Model const* src0, PD_Model const* src1, fl
 /// the algorithm relies on i being computed before i+1
 /// so SIMD just breaks it.
 
-#define MULTILEG 0
+#define MULTILEG 1
 
 void CPG_Update(CPG_Model * model, float dt)
 {	
@@ -277,8 +277,8 @@ void CPG_Update(CPG_Model * model, float dt)
 	static float total_time = 0;
 	total_time += dt;
 	
-	float state_memory_constant = pow(0.5, dt / constants->state_memory_half_life);	
-	float fatigue_memory_constant = pow( 0.5,  dt / constants->fatigue_memory_half_life);
+	float state_memory_constant = 1.f - pow(0.5, dt / constants->state_memory_half_life);	
+	float fatigue_memory_constant = 1.f- pow( 0.5,  dt / constants->fatigue_memory_half_life);
 
 	
 // FIRST LOOP IS EXTENSOR; if output enter stance
@@ -288,7 +288,7 @@ void CPG_Update(CPG_Model * model, float dt)
 //	float state_memory_constant = constants->state_memory_half_life;	
 //	float fatigue_memory_constant = constants->fatigue_memory_half_life;
 	
-	fprintf(stdout, "\n");
+//	fprintf(stdout, "\n");
 	
 	for(int i = 0; i < model->noNeurons; i += 2)
 	{
@@ -315,19 +315,19 @@ void CPG_Update(CPG_Model * model, float dt)
 		}
 #endif
 		
-		inhibition += constants->recurrent_inhibition * neurons[i].fatigue;
+		inhibition += neurons[i].fatigue;
 		
 		float error = fabs(legs[i/2].hip.pos - model->drivers.unit[PD_Swing][PD_Hip].target);
-		inhibition += error * constants->hip_feedback_constant;
+	//	inhibition += error * constants->hip_feedback_constant;
 		
 //		excitation += legs[i/2].hip.pos * constants->hip_feedback_constant;
 		float state = state_memory_constant * neurons[i].state + (1.0 - inhibition);
 		
-		fprintf(stdout, "%f\t", state);
 		
 		neurons[i].state 	= state;
-		neurons[i].fatigue  = fatigue_memory_constant * neurons[i].fatigue + neurons[i].output;
-		neurons[i].output   = state * (state > 0);
+		neurons[i].output   = (state > 0);
+		neurons[i].fatigue  = fatigue_memory_constant * neurons[i].fatigue + neurons[i].output * constants->recurrent_inhibition;		
+	//	fprintf(stdout, "%f\t%f\t%f\n", state, neurons[i].output,neurons[i].fatigue);
 	}
 	
 	
@@ -357,19 +357,18 @@ void CPG_Update(CPG_Model * model, float dt)
 		}
 #endif
 		
-		inhibition += constants->recurrent_inhibition * neurons[i].fatigue;
+		inhibition += neurons[i].fatigue;
 		
 		float error = fabs(legs[i/2].hip.pos - model->drivers.unit[PD_Stance][PD_Hip].target);
 		
-		inhibition += error * constants->hip_feedback_constant;
+	//	inhibition += error * constants->hip_feedback_constant;
 		
 		float state = state_memory_constant * neurons[i].state + (1.0 - inhibition);
 		
-		fprintf(stdout, "%f\t", state);
-		
 		neurons[i].state 	= state;
-		neurons[i].fatigue  = fatigue_memory_constant * neurons[i].fatigue + neurons[i].output;
-		neurons[i].output   = state * (state > 0);
+		neurons[i].output   = (state > 0);
+		neurons[i].fatigue  = fatigue_memory_constant * neurons[i].fatigue + neurons[i].output * constants->recurrent_inhibition;		
+	//	fprintf(stdout, "%f\t%f\t%f\n", state, neurons[i].output,neurons[i].fatigue);
 	}
 	
 	
