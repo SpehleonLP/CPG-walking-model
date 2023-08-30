@@ -1,6 +1,8 @@
 #ifndef CPG_WALKINGMODEL_H
 #define CPG_WALKINGMODEL_H
 
+
+
 /*
 
 Research paper:
@@ -134,6 +136,10 @@ struct CPG_Segment { struct CPG_Leg leg[2]; };
 
 struct CPG_Model
 {		
+	float			   debug_time;
+	int				   debug_frame;
+	struct KeyedGait * debug_gait;
+	
 	CPG_constants settings;
 	PD_Model	  drivers;	
 	

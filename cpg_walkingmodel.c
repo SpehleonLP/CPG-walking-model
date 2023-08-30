@@ -7,6 +7,121 @@
 #include <stdlib.h>
 #include <string.h>
 
+struct KeyedTiming
+{
+	int8_t isRight;
+	int8_t isFront;
+	int8_t isStance;
+	float  time;
+};
+
+struct KeyedGait
+{
+	int    loop_start;
+	int    loop_end;
+	float  loop_time;
+	struct KeyedTiming * sequence;
+};
+
+
+enum { LEFT=0, RIGHT=1, BACK=0, FRONT=1, SWING=0, STANCE=1 };
+
+
+#define TIME(hr, min, sec, frame) ((hr*60 + min)*60 + ( sec + (frame/30.0) ))
+
+struct KeyedTiming Walk_Sequence[] =  {	
+{ RIGHT, BACK, STANCE, TIME(00, 00, 00, 0) },
+{ LEFT, BACK, STANCE, TIME(00, 00, 00, 0) },
+{ LEFT, FRONT, STANCE, TIME(00, 00, 00, 0) },
+{ RIGHT, FRONT, SWING, TIME(00, 00, 00, 0) },
+
+{ RIGHT, BACK, SWING, TIME(00, 00, 00, 6) },
+{ LEFT, FRONT, STANCE, TIME(00, 00, 00, 9) },
+{ RIGHT, BACK, STANCE, TIME(00, 00, 00, 15) },
+{ RIGHT, FRONT, SWING, TIME(00, 00, 00, 24) },
+
+{ LEFT, BACK, SWING, TIME(00, 00, 01, 2) },
+{ RIGHT, FRONT, STANCE, TIME(00, 00, 01, 04) },
+{ LEFT, BACK, STANCE, TIME(00, 00, 01, 11) },
+{ LEFT, FRONT, SWING, TIME(00, 00, 01, 20) },
+
+{ RIGHT, BACK, SWING, TIME(00, 00, 01, 28) },
+{ LEFT, FRONT, STANCE, TIME(00, 00, 01, 29) },
+{ RIGHT, BACK, STANCE, TIME(00, 00, 02, 06) },
+{ RIGHT, FRONT, SWING, TIME(00, 00, 02, 15) },
+
+{ LEFT, BACK, SWING, TIME(00, 00, 02, 23) },
+{ RIGHT, FRONT, STANCE, TIME(00, 00, 02, 24) },
+{ LEFT, BACK, STANCE, TIME(00, 00, 03, 02) },
+{ LEFT, FRONT, SWING, TIME(00, 00, 03, 10) },
+
+{ RIGHT, BACK, SWING, TIME(00, 00, 03, 18) },
+{ LEFT, FRONT, STANCE, TIME(00, 00, 03, 21) },
+{ RIGHT, BACK, STANCE, TIME(00, 00, 03, 28) },
+{ RIGHT, FRONT, SWING, TIME(00, 00, 04, 05) },
+
+{ LEFT, BACK, SWING, TIME(00, 00, 04, 14) },
+{ RIGHT, FRONT, STANCE, TIME(00, 00, 04, 16) },
+{ LEFT, BACK, STANCE, TIME(00, 00, 04, 23) },
+{ LEFT, FRONT, SWING, TIME(00, 00, 05, 02) },
+
+{ RIGHT, BACK, SWING, TIME(00, 00, 05, 9) },
+{ LEFT, FRONT, STANCE, TIME(00, 00, 05, 11) },
+{ RIGHT, BACK, STANCE, TIME(00, 00, 05, 18) },
+{ RIGHT, FRONT, SWING, TIME(00, 00, 05, 27) },
+
+{ LEFT, BACK, SWING, TIME(00, 00, 06, 05) },
+{ RIGHT, FRONT, STANCE, TIME(00, 00, 06, 06) },
+{ LEFT, BACK, STANCE, TIME(00, 00, 06, 15) },
+{ LEFT, FRONT, SWING, TIME(00, 00, 06, 22) },
+
+{ RIGHT, BACK, SWING, TIME(00, 00, 07, 00) },
+{ LEFT, FRONT, STANCE, TIME(00, 00, 07, 01) },
+{ RIGHT, BACK, STANCE, TIME(00, 00, 07, 10) },
+{ RIGHT, FRONT, SWING, TIME(00, 00, 07, 17) },
+
+{ LEFT, BACK, SWING, TIME(00, 00, 07, 25) },
+{ RIGHT, FRONT, STANCE, TIME(00, 00, 07, 27) },
+{ LEFT, BACK, STANCE, TIME(00, 00,  8, 05) },
+{ LEFT, FRONT, SWING, TIME(00, 00,  8, 12) },
+
+{ RIGHT, BACK, SWING, TIME(00, 00, 8, 21) },
+{ LEFT, FRONT, STANCE, TIME(00, 00, 8, 23) },
+{ RIGHT, BACK, STANCE, TIME(00, 00, 9, 00) },
+{ RIGHT, FRONT, SWING, TIME(00, 00, 9, 9) },
+
+{-1, -1, -1, -1}	
+};
+
+struct KeyedGait Walk = {
+	
+	.loop_start = 8,
+	.loop_end   = (sizeof(Walk_Sequence) / sizeof(Walk_Sequence[0])) - 1,
+	.loop_time  = TIME(00, 00, 9, 9) - TIME(00, 00, 00, 24),
+	.sequence = Walk_Sequence
+};
+
+
+
+#if 0
+struct KeyedTiming Trot[] = {
+{ LEFT, BACK, SWING,  },
+{-1, -1, -1, -1}	
+	
+};
+
+struct KeyedTiming Canter[] = {
+{ LEFT, BACK, SWING,  },
+{-1, -1, -1, -1}	
+	
+};
+
+struct KeyedTiming Gallop[] = {
+{ LEFT, BACK, SWING,  },
+{-1, -1, -1, -1}	
+	
+};
+#endif
 void CPG_Update(CPG_Model * model, float dt);
 
 #ifndef M_PI
@@ -53,6 +168,24 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 	r->settings.foot_feedback_constant		= 7.0 * 0.08;	
 	r->settings.hip_feedback_constant		= 3.0;	
 	
+	
+	r->drivers.unit[PD_Swing][PD_Hip].target		= 1.312;	
+	r->drivers.unit[PD_Swing][PD_Hip].proportional  = 4;
+	r->drivers.unit[PD_Swing][PD_Hip].derivative	= -4;
+	
+	r->drivers.unit[PD_Stance][PD_Hip].target		= -0.438;	
+	r->drivers.unit[PD_Stance][PD_Hip].proportional = 1.32;
+	r->drivers.unit[PD_Stance][PD_Hip].derivative	= 0;
+	
+	r->drivers.unit[PD_Swing][PD_Knee].target		= 0.8;	
+	r->drivers.unit[PD_Swing][PD_Knee].proportional = 20;
+	r->drivers.unit[PD_Swing][PD_Knee].derivative	= 0.1;
+	
+	r->drivers.unit[PD_Stance][PD_Knee].target		= 1.0;	
+	r->drivers.unit[PD_Stance][PD_Knee].proportional= 20;
+	r->drivers.unit[PD_Stance][PD_Knee].derivative	= 0.1;
+
+	/*
 	r->drivers.unit[PD_Swing][PD_Hip].target		= 1.312;	
 	r->drivers.unit[PD_Swing][PD_Hip].proportional  = 8.13;
 	r->drivers.unit[PD_Swing][PD_Hip].derivative	= 1;
@@ -67,7 +200,7 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 	
 	r->drivers.unit[PD_Stance][PD_Knee].target		= 1.00;	
 	r->drivers.unit[PD_Stance][PD_Knee].proportional= 1.970;
-	r->drivers.unit[PD_Stance][PD_Knee].derivative	= 0.040;
+	r->drivers.unit[PD_Stance][PD_Knee].derivative	= 0.040;*/
 	
 	*(int*)&r->noSegments = noSegments;	
 	*(int*)&r->noNeurons = noNeurons;
@@ -78,6 +211,10 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 	*(void**)&r->segments = r->contact_force + noLegs;
 	*(void**)&r->legState = r->segments + noSegments;
 	
+	
+	r->debug_time = 0;	
+	r->debug_frame = 0;
+	r->debug_gait = &Walk;
 	
 /*	struct CPG_Leg * legs = &r->segments->leg[0];
 	for(int i = 0; i < noLegs; ++i)
@@ -102,8 +239,44 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 	return r;
 }
 
+void CPG_ModelUpdate_PID(CPG_Model * model, float dt);
+
+
 void CPG_ModelUpdate(CPG_Model * model, float dt)
 {		
+	if(model->debug_gait)
+	{
+		dt *= 1.5f;
+		model->debug_time += dt;
+		
+		for(;;)
+		{
+			for(; model->debug_frame < model->debug_gait->loop_end; ++model->debug_frame)
+			{
+				struct KeyedTiming * key = &model->debug_gait->sequence[model->debug_frame];
+				
+				if(key->time > model->debug_time)
+					goto exit_loop;
+				
+				if(key->isRight < 0)
+					break;
+				
+				int i = key->isFront*2 + key->isRight;
+				model->legState[i] = key->isStance;
+			}
+		
+			model->debug_frame = model->debug_gait->loop_start;
+			model->debug_time -= model->debug_gait->loop_time;
+		}
+		
+	exit_loop:	
+		CPG_ModelUpdate_PID(model, dt);
+		return;
+	}
+	
+	
+	
+#if 0
 	dt*=2;
 	int noLegs =  model->noSegments*2;
 	struct CPG_Leg * legs = &model->segments->leg[0];
@@ -131,24 +304,19 @@ void CPG_ModelUpdate(CPG_Model * model, float dt)
 			}
 		}
 #endif
-#if 0
-		FILE *fp = fopen("cpg_test_data.txt", "a");
-		
-		for(int i = 0; i < noLegs; ++i)
-		{
-			fprintf(fp, "%c ", model->legState[i]? 'x' : ' ');
-		}
-		
-		fprintf(fp, "\n");
-		fclose(fp);
-#endif
 	}
-#else
-	
-	CPG_Update(&model->settings, model->neurons, model->noNeurons, model->senses, model->noSenses, dt);
 	
 #endif
+#endif
+	
+	CPG_ModelUpdate_PID(model, dt);
+	
+}
 
+void CPG_ModelUpdate_PID(CPG_Model * model, float dt)
+{
+	int noLegs =  model->noSegments*2;
+	struct CPG_Leg * legs = &model->segments->leg[0];
 	
 	float invDt = dt? 1.f / dt : 1.f;
 	float halfDt = dt*0.5;
@@ -168,8 +336,8 @@ void CPG_ModelUpdate(CPG_Model * model, float dt)
 		float p_hip_error = model->drivers.unit[s][PD_Hip].target	- legs[i].hip.p_pos;
 		float p_knee_error = model->drivers.unit[s][PD_Knee].target - legs[i].knee.p_pos;
 		
-		float d_hip_error  = (hip_error - p_hip_error) * invDt;		
-		float d_knee_error = (knee_error - p_knee_error) * invDt;
+		float d_hip_error  = (hip_error - p_hip_error);		
+		float d_knee_error = (knee_error - p_knee_error);
 		
 		float hip_pd = model->drivers.unit[s][PD_Hip].proportional   * (hip_error  + model->drivers.unit[s][PD_Hip].derivative * d_hip_error);		
 		float knee_pd = model->drivers.unit[s][PD_Knee].proportional * (knee_error + model->drivers.unit[s][PD_Knee].derivative * d_knee_error);	
@@ -177,17 +345,17 @@ void CPG_ModelUpdate(CPG_Model * model, float dt)
 		legs[i].hip.p_pos = legs[i].hip.pos;		
 		legs[i].knee.p_pos = legs[i].knee.pos;
 
-		float hip_acceleration = (hip_pd - legs[i].hip.velocity) * halfDt;
-		float knee_acceleration = (knee_pd - legs[i].knee.velocity) * halfDt;
+	//	float hip_acceleration = (hip_pd - legs[i].hip.velocity) * halfDt;
+	//	float knee_acceleration = (knee_pd - legs[i].knee.velocity) * halfDt;
 		
-		legs[i].hip.velocity += hip_acceleration;		
-		legs[i].knee.velocity += knee_acceleration;	
+		legs[i].hip.velocity = hip_pd;		
+		legs[i].knee.velocity = knee_pd;	
 		
-		legs[i].hip.pos  += legs[i].hip.velocity * dt;
-		legs[i].knee.pos += legs[i].knee.velocity * dt;	
+		legs[i].hip.pos  += hip_pd * dt;
+		legs[i].knee.pos += knee_pd * dt;	
 		
-		legs[i].hip.velocity += hip_acceleration;		
-		legs[i].knee.velocity += knee_acceleration;	
+	//	legs[i].hip.velocity += hip_acceleration;		
+		//legs[i].knee.velocity += knee_acceleration;	
 		
 		float n_hip_error = model->drivers.unit[s][PD_Hip].target	- legs[i].hip.pos;
 		float n_knee_error = model->drivers.unit[s][PD_Knee].target - legs[i].knee.pos;
@@ -208,11 +376,7 @@ void CPG_ModelUpdate(CPG_Model * model, float dt)
 	//	fprintf(fp, "%f\t%f\t%f\t%f\t%f", legs[i].hip.pos, legs[i].hip.velocity, hip_error, d_hip_error, hip_pd);
 		
 		assert((void*)&legs[i] < (void*)&model->legState[0]);
-	}
-	
-//	fprintf(fp, "\n");
-	//fclose(fp);
-	
+	}	
 }
 
 void PD_ModelSpline(PD_Model * dst, PD_Model const* src, float t)
