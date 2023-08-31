@@ -99,11 +99,15 @@ struct CPG_constants
 	float hip_feedback_constant;		// k1{3.0};	
 };
 
-struct PD_Driver
+// PD driver from paper is just worthless it doens't produce naturalistic motion.
+// Optimally the velocity curve should approximate a sine wave
+// But the best i can figure out is just a constant accelleration/decelleration
+struct Accel_Driver
 {
 	float target;
-	float proportional;
-	float derivative;
+	float maxVelocity;
+	float acceleration;
+	float deceleration;
 };
 
 enum PD_UNIT
@@ -119,7 +123,7 @@ enum PD_UNIT
 
 struct PD_Model
 {
-	struct PD_Driver unit[PD_StateTotal][PD_JointTotal];
+	struct Accel_Driver unit[PD_StateTotal][PD_JointTotal];
 };
 
 
@@ -128,7 +132,6 @@ struct CPG_Joint
 {	
 	float pos;
 	float velocity;
-	float p_pos;
 };
 
 struct CPG_Leg { struct CPG_Joint hip, knee; };

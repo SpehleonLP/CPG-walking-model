@@ -136,6 +136,21 @@ struct CPG_neuron
 	float output;
 };
 
+
+static float SolveAcceleration(float distance, float time, float maxVelocity)
+{
+	(void)maxVelocity;
+	// distance = 0.5 * acceleration * time*time
+	// distance * 2 / (time*time) = = acceleration 
+	float acceleration = distance * 2 / (time*time);
+	return acceleration;
+}
+
+static float SolveHalfAcceleration(float distance, float time, float maxVelocity)
+{
+	return SolveAcceleration(distance/2, time/2, maxVelocity);
+}
+
 struct CPG_Model * CPG_ModelCreate(int noSegments)
 {
 	int noLegs     = noSegments*2;
@@ -169,21 +184,29 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 	r->settings.hip_feedback_constant		= 3.0;	
 	
 	
-	r->drivers.unit[PD_Swing][PD_Hip].target		= 1.312;	
-	r->drivers.unit[PD_Swing][PD_Hip].proportional  = 4;
-	r->drivers.unit[PD_Swing][PD_Hip].derivative	= -4;
+	float swing_time = (TIME(00, 00, 00, 15) - TIME(00, 00, 00, 6));
+	float step_time  = (TIME(00, 00, 1, 28) - TIME(00, 00, 00, 15));
+	
+	r->drivers.unit[PD_Swing][PD_Hip].target		= 1.0;	
+	r->drivers.unit[PD_Swing][PD_Hip].maxVelocity  = 0;
+	r->drivers.unit[PD_Swing][PD_Hip].acceleration  = SolveHalfAcceleration((1.1 + 0.438), swing_time, 1);
+	r->drivers.unit[PD_Swing][PD_Hip].deceleration  = r->drivers.unit[PD_Swing][PD_Hip].acceleration;
 	
 	r->drivers.unit[PD_Stance][PD_Hip].target		= -0.438;	
-	r->drivers.unit[PD_Stance][PD_Hip].proportional = 1.32;
-	r->drivers.unit[PD_Stance][PD_Hip].derivative	= 0;
+	r->drivers.unit[PD_Stance][PD_Hip].maxVelocity  = 0;
+	r->drivers.unit[PD_Stance][PD_Hip].acceleration  = SolveHalfAcceleration((1.1 + 0.438), step_time, 1);
+	r->drivers.unit[PD_Stance][PD_Hip].deceleration  = r->drivers.unit[PD_Stance][PD_Hip].acceleration;
 	
 	r->drivers.unit[PD_Swing][PD_Knee].target		= 0.8;	
-	r->drivers.unit[PD_Swing][PD_Knee].proportional = 20;
-	r->drivers.unit[PD_Swing][PD_Knee].derivative	= 0.1;
+	r->drivers.unit[PD_Swing][PD_Knee].maxVelocity  = 0;
+	r->drivers.unit[PD_Swing][PD_Knee].acceleration  = 200;
+	r->drivers.unit[PD_Swing][PD_Knee].deceleration  = 200;
 	
-	r->drivers.unit[PD_Stance][PD_Knee].target		= 1.0;	
-	r->drivers.unit[PD_Stance][PD_Knee].proportional= 20;
-	r->drivers.unit[PD_Stance][PD_Knee].derivative	= 0.1;
+	r->drivers.unit[PD_Stance][PD_Knee].target		= 1.1;	
+	r->drivers.unit[PD_Stance][PD_Knee].maxVelocity  = 0;
+	r->drivers.unit[PD_Stance][PD_Knee].acceleration  = 20;
+	r->drivers.unit[PD_Stance][PD_Knee].deceleration  = 1;
+	
 
 	/*
 	r->drivers.unit[PD_Swing][PD_Hip].target		= 1.312;	
@@ -246,7 +269,7 @@ void CPG_ModelUpdate(CPG_Model * model, float dt)
 {		
 	if(model->debug_gait)
 	{
-		dt *= 1.5f;
+	//	dt *= 1.5f;
 		model->debug_time += dt;
 		
 		for(;;)
@@ -314,22 +337,85 @@ void CPG_ModelUpdate(CPG_Model * model, float dt)
 }
 
 void CPG_ModelUpdate_PID(CPG_Model * model, float dt)
-{
-	int noLegs =  model->noSegments*2;
-	struct CPG_Leg * legs = &model->segments->leg[0];
-	
-	float invDt = dt? 1.f / dt : 1.f;
-	float halfDt = dt*0.5;
-	
+{		
 //FILE *fp = fopen("cpg_test_data.txt", "a");
 //	
 //	fprintf(fp, "%f\t", total_time);
-
 	
-	for(int i = 0; i < noLegs; ++i)
-	{
-		int s = model->legState[i];		
+	float halfDt = dt*0.5f;
+	
+	int noJoints = model->noSegments*4;
+	struct CPG_Joint * joints = &model->segments->leg[0].hip;
+	
+	struct min_max { float min, max; };
+	struct min_max limit[2];
+	
+	for(int i = 0; i < 2; ++i)
+	{	
+		limit[i].min = model->drivers.unit[PD_Swing][i].target;
+		limit[i].max = model->drivers.unit[PD_Stance][i].target;
 		
+		if(limit[i].min > limit[i].max)
+		{
+			float eax = limit[i].min;
+			limit[i].min = limit[i].max;
+			limit[i].max = eax;
+		}
+	}
+	
+	for(int i = 0; i < noJoints; ++i)
+	{
+		struct Accel_Driver * driver = &model->drivers.unit[(int)model->legState[i/2]][i % 2];
+		
+		if(joints[i].pos == driver->target)
+			continue;
+		
+	//	if((driver->target - joints[i].pos) * joints[i].velocity < 0)
+	//		joints[i].velocity = 0;
+	 
+		float acceleration = 0.f;
+		
+		int direction = joints[i].velocity > 0? -1 : 1;
+		float time_0_velo = fabs(joints[i].velocity) / driver->deceleration;
+		float pos_0_velo = joints[i].pos + time_0_velo * (joints[i].velocity + 0.5 * driver->deceleration * time_0_velo * direction);
+		
+		float ratio = (pos_0_velo - joints[i].pos) / (driver->target - joints[i].pos);
+			
+		if(ratio >= 1.f)
+		{
+// p' = p + vt + .5at^2
+// p' - p - vt = .5at^2
+// 2*(p' - p - vt)/t^2 = a
+			acceleration = 2 * (driver->target - joints[i].pos - joints[i].velocity * time_0_velo) / (time_0_velo * time_0_velo);			
+	//		acceleration = driver->deceleration * direction * ratio* ratio; 
+		}
+		else
+			acceleration = (joints[i].pos < driver->target? 1 : -1) * driver->acceleration;
+		
+		acceleration *= halfDt;
+		joints[i].velocity += acceleration;
+		joints[i].pos += joints[i].velocity * dt;
+		joints[i].velocity += acceleration;
+			
+		if(driver->maxVelocity && fabs(joints[i].velocity) > driver->maxVelocity)
+			joints[i].velocity = (joints[i].velocity < 0? -1 : 1) * driver->maxVelocity;
+			
+		joints[i].velocity *= (joints[i].pos != driver->target);
+		
+		if(joints[i].pos < limit[i%2].min)
+		{
+			joints[i].pos = limit[i%2].min;
+			joints[i].velocity = 0;
+		}	
+		
+		if(joints[i].pos > limit[i%2].max)
+		{
+			joints[i].pos = limit[i%2].max;
+			joints[i].velocity = 0;
+		}	
+		
+		
+#if 0
 		float hip_error = model->drivers.unit[s][PD_Hip].target	  - legs[i].hip.pos;
 		float knee_error = model->drivers.unit[s][PD_Knee].target - legs[i].knee.pos;
 		
@@ -376,6 +462,7 @@ void CPG_ModelUpdate_PID(CPG_Model * model, float dt)
 	//	fprintf(fp, "%f\t%f\t%f\t%f\t%f", legs[i].hip.pos, legs[i].hip.velocity, hip_error, d_hip_error, hip_pd);
 		
 		assert((void*)&legs[i] < (void*)&model->legState[0]);
+#endif
 	}	
 }
 
