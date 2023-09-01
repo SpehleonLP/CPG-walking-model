@@ -30,6 +30,68 @@ enum { LEFT=0, RIGHT=1, BACK=0, FRONT=1, SWING=0, STANCE=1 };
 #define TIME(hr, min, sec, frame) ((hr*60 + min)*60 + ( sec + (frame/30.0) ))
 
 struct KeyedTiming Walk_Sequence[] =  {	
+{	RIGHT,	BACK,	STANCE,	0				},
+{	LEFT,	BACK,	STANCE,	0				},
+{	LEFT,	FRONT,	STANCE,	0				},
+{	RIGHT,	FRONT,	SWING,	0				},
+								
+{	RIGHT,	BACK,	SWING,	0.2				},
+{	LEFT,	FRONT,	STANCE,	0.3				},
+{	RIGHT,	BACK,	STANCE,	0.5				},
+{	RIGHT,	FRONT,	SWING,	0.8				},
+								
+{	LEFT,	BACK,	SWING,	1				},
+{	RIGHT,	FRONT,	STANCE,	1.1				},
+{	LEFT,	BACK,	STANCE,	1.3				},
+{	LEFT,	FRONT,	SWING,	1.5				},
+								
+{	RIGHT,	BACK,	SWING,	1.7				},
+{	LEFT,	FRONT,	STANCE,	1.8				},
+{	RIGHT,	BACK,	STANCE,	2				},
+{	RIGHT,	FRONT,	SWING,	2.3				},
+								
+{	LEFT,	BACK,	SWING,	2.5				},
+{	RIGHT,	FRONT,	STANCE,	2.6				},
+{	LEFT,	BACK,	STANCE,	2.8				},
+{	LEFT,	FRONT,	SWING,	3				},
+								
+{	RIGHT,	BACK,	SWING,	3.2				},
+{	LEFT,	FRONT,	STANCE,	3.3				},
+{	RIGHT,	BACK,	STANCE,	3.5				},
+{	RIGHT,	FRONT,	SWING,	3.8				},
+								
+{	LEFT,	BACK,	SWING,	4				},
+{	RIGHT,	FRONT,	STANCE,	4.1				},
+{	LEFT,	BACK,	STANCE,	4.3				},
+{	LEFT,	FRONT,	SWING,	4.5				},
+								
+{	RIGHT,	BACK,	SWING,	4.7				},
+{	LEFT,	FRONT,	STANCE,	4.8				},
+{	RIGHT,	BACK,	STANCE,	5				},
+{	RIGHT,	FRONT,	SWING,	5.3				},
+								
+{	LEFT,	BACK,	SWING,	5.5				},
+{	RIGHT,	FRONT,	STANCE,	5.6				},
+{	LEFT,	BACK,	STANCE,	5.8				},
+{	LEFT,	FRONT,	SWING,	6				},
+								
+{	RIGHT,	BACK,	SWING,	6.2				},
+{	LEFT,	FRONT,	STANCE,	6.3				},
+{	RIGHT,	BACK,	STANCE,	6.5				},
+{	RIGHT,	FRONT,	SWING,	6.8				},
+								
+{	LEFT,	BACK,	SWING,	7				},
+{	RIGHT,	FRONT,	STANCE,	7.1				},
+{	LEFT,	BACK,	STANCE,	7.3				},
+{	LEFT,	FRONT,	SWING,	7.5				},
+								
+{	RIGHT,	BACK,	SWING,	7.7				},
+{	LEFT,	FRONT,	STANCE,	7.8				},
+{	RIGHT,	BACK,	STANCE,	8				},
+{	RIGHT,	FRONT,	SWING,	8.3				},
+
+
+/*
 { RIGHT, BACK, STANCE, TIME(00, 00, 00, 0) },
 { LEFT, BACK, STANCE, TIME(00, 00, 00, 0) },
 { LEFT, FRONT, STANCE, TIME(00, 00, 00, 0) },
@@ -89,6 +151,7 @@ struct KeyedTiming Walk_Sequence[] =  {
 { LEFT, FRONT, STANCE, TIME(00, 00, 8, 23) },
 { RIGHT, BACK, STANCE, TIME(00, 00, 9, 00) },
 { RIGHT, FRONT, SWING, TIME(00, 00, 9, 9) },
+*/
 
 {-1, -1, -1, -1}	
 };
@@ -97,7 +160,7 @@ struct KeyedGait Walk = {
 	
 	.loop_start = 8,
 	.loop_end   = (sizeof(Walk_Sequence) / sizeof(Walk_Sequence[0])) - 1,
-	.loop_time  = TIME(00, 00, 9, 9) - TIME(00, 00, 00, 24),
+	.loop_time  = 8.3 - 1,
 	.sequence = Walk_Sequence
 };
 
@@ -184,20 +247,20 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 	r->settings.hip_feedback_constant		= 3.0;	
 	
 	
-	float swing_time = (TIME(00, 00, 00, 15) - TIME(00, 00, 00, 6));
-	float step_time  = (TIME(00, 00, 1, 28) - TIME(00, 00, 00, 15));
+	float swing_time = 0.3;
+	float step_time  = 1.2;
 	
 	r->drivers.unit[PD_Swing][PD_Hip].target		= 1.0;	
 	r->drivers.unit[PD_Swing][PD_Hip].maxVelocity  = 0;
-	r->drivers.unit[PD_Swing][PD_Hip].acceleration  = SolveHalfAcceleration((1.1 + 0.438), swing_time, 1);
+	r->drivers.unit[PD_Swing][PD_Hip].acceleration  = SolveHalfAcceleration((1.0 + 0.438), swing_time, 1);
 	r->drivers.unit[PD_Swing][PD_Hip].deceleration  = r->drivers.unit[PD_Swing][PD_Hip].acceleration;
 	
 	r->drivers.unit[PD_Stance][PD_Hip].target		= -0.438;	
 	r->drivers.unit[PD_Stance][PD_Hip].maxVelocity  = 0;
-	r->drivers.unit[PD_Stance][PD_Hip].acceleration  = SolveHalfAcceleration((1.1 + 0.438), step_time, 1);
+	r->drivers.unit[PD_Stance][PD_Hip].acceleration  = SolveHalfAcceleration((1.0 + 0.438), step_time, 1);
 	r->drivers.unit[PD_Stance][PD_Hip].deceleration  = r->drivers.unit[PD_Stance][PD_Hip].acceleration;
 	
-	r->drivers.unit[PD_Swing][PD_Knee].target		= 0.8;	
+	r->drivers.unit[PD_Swing][PD_Knee].target		= 0.7;	
 	r->drivers.unit[PD_Swing][PD_Knee].maxVelocity  = 0;
 	r->drivers.unit[PD_Swing][PD_Knee].acceleration  = 200;
 	r->drivers.unit[PD_Swing][PD_Knee].deceleration  = 200;
