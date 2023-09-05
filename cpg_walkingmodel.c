@@ -1,4 +1,5 @@
 #include "cpg_walkingmodel.h"
+#include "debug_keyed_timings.h"
 #include <assert.h>
 #include <math.h>
 #include <stdint.h>
@@ -6,102 +7,6 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-
-struct KeyedTiming
-{
-	int8_t isRight;
-	int8_t isFront;
-	int8_t isStance;
-	float  time;
-};
-
-struct KeyedGait
-{
-	int    loop_start;
-	int    loop_end;
-	float  loop_time;
-	struct KeyedTiming * sequence;
-};
-
-
-enum { LEFT=0, RIGHT=1, BACK=0, FRONT=1, SWING=0, STANCE=1 };
-
-
-#define TIME(hr, min, sec, frame) ((hr*60 + min)*60 + ( sec + (frame/30.0) ))
-
-struct KeyedTiming Walk_Sequence[] =  {	
-{ RIGHT, BACK, STANCE, TIME(00, 00, 00, 0) },
-{ LEFT, BACK, STANCE, TIME(00, 00, 00, 0) },
-{ LEFT, FRONT, STANCE, TIME(00, 00, 00, 0) },
-{ RIGHT, FRONT, SWING, TIME(00, 00, 00, 0) },
-
-{ RIGHT, BACK, SWING, TIME(00, 00, 00, 6) },
-{ LEFT, FRONT, STANCE, TIME(00, 00, 00, 9) },
-{ RIGHT, BACK, STANCE, TIME(00, 00, 00, 15) },
-{ RIGHT, FRONT, SWING, TIME(00, 00, 00, 24) },
-
-{ LEFT, BACK, SWING, TIME(00, 00, 01, 2) },
-{ RIGHT, FRONT, STANCE, TIME(00, 00, 01, 04) },
-{ LEFT, BACK, STANCE, TIME(00, 00, 01, 11) },
-{ LEFT, FRONT, SWING, TIME(00, 00, 01, 20) },
-
-{ RIGHT, BACK, SWING, TIME(00, 00, 01, 28) },
-{ LEFT, FRONT, STANCE, TIME(00, 00, 01, 29) },
-{ RIGHT, BACK, STANCE, TIME(00, 00, 02, 06) },
-{ RIGHT, FRONT, SWING, TIME(00, 00, 02, 15) },
-
-{ LEFT, BACK, SWING, TIME(00, 00, 02, 23) },
-{ RIGHT, FRONT, STANCE, TIME(00, 00, 02, 24) },
-{ LEFT, BACK, STANCE, TIME(00, 00, 03, 02) },
-{ LEFT, FRONT, SWING, TIME(00, 00, 03, 10) },
-
-{ RIGHT, BACK, SWING, TIME(00, 00, 03, 18) },
-{ LEFT, FRONT, STANCE, TIME(00, 00, 03, 21) },
-{ RIGHT, BACK, STANCE, TIME(00, 00, 03, 28) },
-{ RIGHT, FRONT, SWING, TIME(00, 00, 04, 05) },
-
-{ LEFT, BACK, SWING, TIME(00, 00, 04, 14) },
-{ RIGHT, FRONT, STANCE, TIME(00, 00, 04, 16) },
-{ LEFT, BACK, STANCE, TIME(00, 00, 04, 23) },
-{ LEFT, FRONT, SWING, TIME(00, 00, 05, 02) },
-
-{ RIGHT, BACK, SWING, TIME(00, 00, 05, 9) },
-{ LEFT, FRONT, STANCE, TIME(00, 00, 05, 11) },
-{ RIGHT, BACK, STANCE, TIME(00, 00, 05, 18) },
-{ RIGHT, FRONT, SWING, TIME(00, 00, 05, 27) },
-
-{ LEFT, BACK, SWING, TIME(00, 00, 06, 05) },
-{ RIGHT, FRONT, STANCE, TIME(00, 00, 06, 06) },
-{ LEFT, BACK, STANCE, TIME(00, 00, 06, 15) },
-{ LEFT, FRONT, SWING, TIME(00, 00, 06, 22) },
-
-{ RIGHT, BACK, SWING, TIME(00, 00, 07, 00) },
-{ LEFT, FRONT, STANCE, TIME(00, 00, 07, 01) },
-{ RIGHT, BACK, STANCE, TIME(00, 00, 07, 10) },
-{ RIGHT, FRONT, SWING, TIME(00, 00, 07, 17) },
-
-{ LEFT, BACK, SWING, TIME(00, 00, 07, 25) },
-{ RIGHT, FRONT, STANCE, TIME(00, 00, 07, 27) },
-{ LEFT, BACK, STANCE, TIME(00, 00,  8, 05) },
-{ LEFT, FRONT, SWING, TIME(00, 00,  8, 12) },
-
-{ RIGHT, BACK, SWING, TIME(00, 00, 8, 21) },
-{ LEFT, FRONT, STANCE, TIME(00, 00, 8, 23) },
-{ RIGHT, BACK, STANCE, TIME(00, 00, 9, 00) },
-{ RIGHT, FRONT, SWING, TIME(00, 00, 9, 9) },
-
-
-{-1, -1, -1, -1}	
-};
-
-struct KeyedGait Walk = {
-	
-	.loop_start = 8,
-	.loop_end   = (sizeof(Walk_Sequence) / sizeof(Walk_Sequence[0])) - 1,
-	.loop_time  = TIME(00, 00, 9, 9) - TIME(00, 00, 01, 2),
-	.sequence = Walk_Sequence
-};
-
 
 
 #if 0
@@ -198,10 +103,10 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 	r->drivers.unit[PD_Stance][PD_Hip].acceleration  = SolveHalfAcceleration((1.0 + 0.438), step_time, 1);
 	r->drivers.unit[PD_Stance][PD_Hip].deceleration  = r->drivers.unit[PD_Stance][PD_Hip].acceleration;
 	
-	r->drivers.unit[PD_Swing][PD_Knee].target		= 0.7;	
+	r->drivers.unit[PD_Swing][PD_Knee].target		= 0.5;	
 	r->drivers.unit[PD_Swing][PD_Knee].maxVelocity  = 0;
-	r->drivers.unit[PD_Swing][PD_Knee].acceleration  = 50;
-	r->drivers.unit[PD_Swing][PD_Knee].deceleration  = 50;
+	r->drivers.unit[PD_Swing][PD_Knee].acceleration  = 80;
+	r->drivers.unit[PD_Swing][PD_Knee].deceleration  = 40;
 	
 	r->drivers.unit[PD_Stance][PD_Knee].target		= 1.1;	
 	r->drivers.unit[PD_Stance][PD_Knee].maxVelocity  = 0;
@@ -235,11 +140,6 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 	*(void**)&r->segments = r->contact_force + noLegs;
 	*(void**)&r->legState = r->segments + noSegments;
 	
-	
-	r->debug_time = 0;	
-	r->debug_frame = 0;
-	r->debug_gait = &Walk;
-	
 /*	struct CPG_Leg * legs = &r->segments->leg[0];
 	for(int i = 0; i < noLegs; ++i)
 	{
@@ -263,6 +163,16 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 	return r;
 }
 
+void CPG_SetDebugSequence(CPG_Model * model, CPG_KeyedGait * gait)
+{	
+	model->debug_time = 0;	
+	model->debug_frame = 0;
+	model->debug_gait = gait;
+	
+	if(gait != NULL)
+		model->debug_time = gait->sequence[0].time;	
+}
+
 void CPG_ModelUpdate_PID(CPG_Model * model, float dt);
 
 
@@ -277,7 +187,7 @@ void CPG_ModelUpdate(CPG_Model * model, float dt)
 		{
 			for(; model->debug_frame < model->debug_gait->loop_end; ++model->debug_frame)
 			{
-				struct KeyedTiming * key = &model->debug_gait->sequence[model->debug_frame];
+				struct CPG_KeyedTiming * key = &model->debug_gait->sequence[model->debug_frame];
 				
 				if(key->time > model->debug_time)
 					goto exit_loop;

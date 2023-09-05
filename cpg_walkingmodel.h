@@ -55,9 +55,14 @@ typedef struct CPG_constants	CPG_constants;
 typedef struct PD_Model			PD_Model;
 typedef struct CPG_Segment		CPG_Segment;
 typedef struct CPG_Model		CPG_Model;
+typedef struct CPG_KeyedGait	CPG_KeyedGait;
+
 
 // returns a malloced pointer that must be free-d
 struct CPG_Model * CPG_ModelCreate(int noSegments);
+// does not take ownership of memory
+void CPG_SetDebugSequence(CPG_Model * model, CPG_KeyedGait * gait);
+
 void CPG_ModelUpdate(CPG_Model * model, float dt);
 
 // catmul rom spline src must contain 4 elements.
@@ -132,16 +137,22 @@ struct CPG_Joint
 {	
 	float pos;
 	float velocity;
+// you should consider the knee as being a pneumatic piston
+// where if completely balanced on one leg it should be shortened 
+	float user_data[2];
 };
 
 struct CPG_Leg { struct CPG_Joint hip, knee; };
-struct CPG_Segment { struct CPG_Leg leg[2]; };
+struct CPG_Segment 
+{ 
+	struct CPG_Leg leg[2]; 
+};
 
 struct CPG_Model
 {		
-	float			   debug_time;
-	int				   debug_frame;
-	struct KeyedGait * debug_gait;
+	float			debug_time;
+	int				debug_frame;
+	CPG_KeyedGait * debug_gait;
 	
 	CPG_constants settings;
 	PD_Model	  drivers;	
