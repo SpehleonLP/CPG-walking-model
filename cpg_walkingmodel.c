@@ -35,6 +35,8 @@ void CPG_Update(CPG_Model * model, float dt);
 #endif
 #define M_2PI (2*M_PI)
 
+#define TIME(hr, min, sec, frame) ((hr*60 + min)*60 + ( sec + (frame/30.0) ))
+
 struct CPG_neuron
 {
 	float state;
@@ -90,29 +92,67 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 	r->settings.hip_feedback_constant		= 3.0;	
 	
 	
-	float swing_time = 0.3;
-	float step_time  = 1.2;
+/*  WALK_CYCLE
+	float swing_time = TIME(00, 00, 8, 21) - TIME(00, 00, 07, 10);
+	float step_time  = TIME(00, 00, 07, 10) - TIME(00, 00, 05, 18);
+//*/
+	
+//*  TROT_CYCLE
+	float swing_time = TIME(00, 00, 30, 22) - TIME(00, 00, 30, 8);
+	float step_time  = TIME(00, 00, 31, 03) - TIME(00, 00, 30, 22);
+//*/
+	
+/*  CANTER_CYCLE
+	float swing_time = TIME(00, 00, 00, 5);
+	float step_time  = TIME(00, 00, 00, 10);
+//*/
+	
+ /*  GALLOP_CYCLE
+	float swing_time = TIME(00, 00, 50, 14) - TIME(00, 00, 50, 4);
+	float step_time  = TIME(00, 00, 50, 22) - TIME(00, 00, 50, 14);
+//*/
 	
 	r->drivers.unit[PD_Swing][PD_Hip].target		= 1.0;	
 	r->drivers.unit[PD_Swing][PD_Hip].maxVelocity  = 0;
 	r->drivers.unit[PD_Swing][PD_Hip].acceleration  = SolveHalfAcceleration((1.0 + 0.438), swing_time, 1);
 	r->drivers.unit[PD_Swing][PD_Hip].deceleration  = r->drivers.unit[PD_Swing][PD_Hip].acceleration;
 	
+	r->drivers.unit[PD_Swing][PD_Knee].target		= 0.7;	
+	r->drivers.unit[PD_Swing][PD_Knee].maxVelocity  = 0;
+	r->drivers.unit[PD_Swing][PD_Knee].acceleration  = 400;
+	r->drivers.unit[PD_Swing][PD_Knee].deceleration  = 10;
+	
+	r->drivers.unit[PD_Stance][PD_Knee].target		= 1.1;	
+	r->drivers.unit[PD_Stance][PD_Knee].maxVelocity  = 0;
+	r->drivers.unit[PD_Stance][PD_Knee].acceleration  = 20;
+	r->drivers.unit[PD_Stance][PD_Knee].deceleration  = 1;	
+	
 	r->drivers.unit[PD_Stance][PD_Hip].target		= -0.438;	
 	r->drivers.unit[PD_Stance][PD_Hip].maxVelocity  = 0;
 	r->drivers.unit[PD_Stance][PD_Hip].acceleration  = SolveHalfAcceleration((1.0 + 0.438), step_time, 1);
 	r->drivers.unit[PD_Stance][PD_Hip].deceleration  = r->drivers.unit[PD_Stance][PD_Hip].acceleration;
 	
-	r->drivers.unit[PD_Swing][PD_Knee].target		= 0.5;	
+/* 	 WALK_CYCLE
+	r->drivers.unit[PD_Swing][PD_Hip].target		= 1.0;	
+	r->drivers.unit[PD_Swing][PD_Hip].maxVelocity  = 0;
+	r->drivers.unit[PD_Swing][PD_Hip].acceleration  = SolveHalfAcceleration((1.0 + 0.438), swing_time, 1);
+	r->drivers.unit[PD_Swing][PD_Hip].deceleration  = r->drivers.unit[PD_Swing][PD_Hip].acceleration;
+	
+	r->drivers.unit[PD_Swing][PD_Knee].target		= 0.7;	
 	r->drivers.unit[PD_Swing][PD_Knee].maxVelocity  = 0;
-	r->drivers.unit[PD_Swing][PD_Knee].acceleration  = 80;
-	r->drivers.unit[PD_Swing][PD_Knee].deceleration  = 40;
+	r->drivers.unit[PD_Swing][PD_Knee].acceleration  = 400;
+	r->drivers.unit[PD_Swing][PD_Knee].deceleration  = 10;
 	
 	r->drivers.unit[PD_Stance][PD_Knee].target		= 1.1;	
 	r->drivers.unit[PD_Stance][PD_Knee].maxVelocity  = 0;
 	r->drivers.unit[PD_Stance][PD_Knee].acceleration  = 20;
-	r->drivers.unit[PD_Stance][PD_Knee].deceleration  = 1;
+	r->drivers.unit[PD_Stance][PD_Knee].deceleration  = 1;	
 	
+	r->drivers.unit[PD_Stance][PD_Hip].target		= -0.438;	
+	r->drivers.unit[PD_Stance][PD_Hip].maxVelocity  = 0;
+	r->drivers.unit[PD_Stance][PD_Hip].acceleration  = SolveHalfAcceleration((1.0 + 0.438), step_time, 1);
+	r->drivers.unit[PD_Stance][PD_Hip].deceleration  = r->drivers.unit[PD_Stance][PD_Hip].acceleration;
+	// */
 
 	/*
 	r->drivers.unit[PD_Swing][PD_Hip].target		= 1.312;	

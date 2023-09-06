@@ -19,6 +19,7 @@ struct CPG_KeyedGait
 	int    loop_start;
 	int    loop_end;
 	float  loop_time;
+	float  start_time;
 	struct CPG_KeyedTiming * sequence;
 };
 

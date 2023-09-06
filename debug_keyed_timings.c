@@ -72,6 +72,7 @@ struct CPG_KeyedGait CPG_Debug_Walk = {
 	.loop_start = 8,
 	.loop_end   = (sizeof(Walk_Sequence) / sizeof(Walk_Sequence[0])) - 1,
 	.loop_time  = TIME(00, 00, 9, 9) - TIME(00, 00, 01, 2),
+	.start_time = TIME(00, 00, 9, 9),
 	.sequence = Walk_Sequence
 };
 
@@ -138,7 +139,8 @@ struct CPG_KeyedGait CPG_Debug_Trot = {
 	
 	.loop_start = 4,
 	.loop_end   = (sizeof(Trot_Sequence) / sizeof(Trot_Sequence[0])) - 1,
-	.loop_time  = TIME(00, 00, 24, 03) - TIME(00, 00, 20, 0),
+	.loop_time  = TIME(00, 00, 24, 03) - TIME(00, 00, 20, 0) + TIME(00, 00, 00, 4),
+	.start_time = TIME(00, 00, 20, 0),
 	.sequence = Trot_Sequence
 };
 
@@ -206,7 +208,8 @@ struct CPG_KeyedGait CPG_Debug_Canter = {
 	
 	.loop_start = 4,
 	.loop_end   = (sizeof(Canter_Sequence) / sizeof(Canter_Sequence[0])) - 1,
-	.loop_time  = TIME(00, 00, 32, 14) - TIME(00, 00, 30, 0),
+	.loop_time  = TIME(00, 00, 32, 14) - TIME(00, 00, 30, 0) + TIME(00, 00, 00, 3),
+	.start_time = TIME(00, 00, 30, 0),
 	.sequence = Canter_Sequence
 };
 
@@ -273,6 +276,7 @@ struct CPG_KeyedGait CPG_Debug_Gallop = {
 	
 	.loop_start = 4,
 	.loop_end   = (sizeof(Gallop_Sequence) / sizeof(Gallop_Sequence[0])) - 1,
-	.loop_time  = TIME(00, 00, 52, 15) - TIME(00, 00, 49, 28),
+	.loop_time  = TIME(00, 00, 52, 15) - TIME(00, 00, 49, 28) + TIME(00, 00, 00, 4),
+	.start_time = TIME(00, 00, 49, 28),
 	.sequence = Gallop_Sequence
 };
