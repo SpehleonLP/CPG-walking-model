@@ -8,26 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-
-#if 0
-struct KeyedTiming Trot[] = {
-{ LEFT, BACK, SWING,  },
-{-1, -1, -1, -1}	
-	
-};
-
-struct KeyedTiming Canter[] = {
-{ LEFT, BACK, SWING,  },
-{-1, -1, -1, -1}	
-	
-};
-
-struct KeyedTiming Gallop[] = {
-{ LEFT, BACK, SWING,  },
-{-1, -1, -1, -1}	
-	
-};
-#endif
 void CPG_Update(CPG_Model * model, float dt);
 
 #ifndef M_PI
@@ -112,6 +92,9 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 	float step_time  = TIME(00, 00, 50, 22) - TIME(00, 00, 50, 14);
 //*/
 	
+	float cycleTime = swing_time + step_time;
+	PD_ModelConfigure(&r->drivers, cycleTime, step_time / cycleTime, 0.1, 0.1);
+#if 0 
 	r->drivers.unit[PD_Swing][PD_Hip].target		= 1.0;	
 	r->drivers.unit[PD_Swing][PD_Hip].maxVelocity  = 0;
 	r->drivers.unit[PD_Swing][PD_Hip].acceleration  = SolveHalfAcceleration((1.0 + 0.438), swing_time, 1);
@@ -131,7 +114,7 @@ struct CPG_Model * CPG_ModelCreate(int noSegments)
 	r->drivers.unit[PD_Stance][PD_Hip].maxVelocity  = 0;
 	r->drivers.unit[PD_Stance][PD_Hip].acceleration  = SolveHalfAcceleration((1.0 + 0.438), step_time, 1);
 	r->drivers.unit[PD_Stance][PD_Hip].deceleration  = r->drivers.unit[PD_Stance][PD_Hip].acceleration;
-	
+#endif
 /* 	 WALK_CYCLE
 	r->drivers.unit[PD_Swing][PD_Hip].target		= 1.0;	
 	r->drivers.unit[PD_Swing][PD_Hip].maxVelocity  = 0;
@@ -417,6 +400,37 @@ void CPG_ModelUpdate_PID(CPG_Model * model, float dt)
 	}	
 }
 
+void PD_ModelConfigure(PD_Model * dst, float cycleTime, float stepPercent, float peakTimeSwing, float peakTimeStep)
+{
+	assert(0 < stepPercent && stepPercent < 1);
+	assert(0 < peakTimeStep && peakTimeStep < 1);
+	
+	float time[2];
+	float peakTime[2] = { peakTimeSwing, peakTimeStep };
+	
+	time[PD_Swing]  = cycleTime * (1.f - stepPercent);
+	time[PD_Stance] = cycleTime * (stepPercent);
+	
+	for(int phase = 0; phase < 2; ++phase)
+	{
+		float p_time = time[phase]; 
+		
+		for(int part = 0; part < 2; ++part)
+		{
+			float t = p_time * (part == PD_Hip? 0.5f : peakTime[phase]);
+			
+			float invT = p_time - t;
+			
+			dst->unit[phase][part].target = phase;		
+			dst->unit[phase][part].maxVelocity = 0.0;
+
+			dst->unit[phase][part].acceleration = 2 / (t*t + t / invT * invT * invT);			
+			dst->unit[phase][part].deceleration = dst->unit[phase][part].acceleration * t / invT;
+		}
+	}	
+}
+
+#if 0 
 void PD_ModelSpline(PD_Model * dst, PD_Model const* src, float t)
 {
 	enum 
@@ -460,6 +474,7 @@ void PD_ModelLerp(PD_Model * dst, PD_Model const* src0, PD_Model const* src1, fl
 		r[i] = p0[i] * (1 - t) + p1[i] * t;
 	}
 }
+#endif
 
 /// If optimized further than this the algorithm no longer works
 /// its not like game of life where everything computes at once

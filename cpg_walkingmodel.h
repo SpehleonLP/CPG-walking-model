@@ -66,8 +66,7 @@ void CPG_SetDebugSequence(CPG_Model * model, CPG_KeyedGait * gait);
 void CPG_ModelUpdate(CPG_Model * model, float dt);
 
 // catmul rom spline src must contain 4 elements.
-void PD_ModelSpline(PD_Model * dst, PD_Model const* src, float t);
-void PD_ModelLerp(PD_Model * dst, PD_Model const* src0, PD_Model const* src1, float t);
+void PD_ModelConfigure(PD_Model * dst, float cycleTime, float stepPercent, float peakTimeSwing, float peakTimeStep);
 
 // helper functions to compute weight on each foot 
 // returns total mass
