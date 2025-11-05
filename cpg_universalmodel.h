@@ -22,15 +22,6 @@ struct CPG_Limb
 	int group;
 };
 
-struct CPG_CreationCommand
-{
-	int * limb_id;
-	int * limbs_in_group; // 0 for sentinal
-	int * root_of_group; // gets an up/down oscilator
-	int no_limbs;
-	int no_groups;
-};
-
 struct CPG_Model * CPG_ModelCreate(struct CPG_Limb * limbs, size_t size);
 
 struct CPG_constants
@@ -97,6 +88,8 @@ struct CPG_Oscilator
 	float   speed; // rad/s
 // for a leg we conceptualize this as a scotch yoke
 	float   position; // [0, 2pi)
+	
+	float   cyclesThisFrame;
 };
 
 // contralateral inhibition
