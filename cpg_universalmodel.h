@@ -21,18 +21,25 @@ struct CPG_Limb
 	int common_root;
 	int segment;
 };
+	
+struct	CPG_ConstructionCommand 
+{
+	struct CPG_Limb * limbs;
+	size_t limb_size;
+	int * ipsilateral_inhibition_groups;
+	size_t ipsilateral_inhibition_groups_size; 
+};
+	
+struct CPG_Model * CPG_ModelCreate(const struct CPG_ConstructionCommand *cmd);
+// doesn't copy internal state only structure of model. 
+struct CPG_Model * CPG_ModelCopy(const struct CPG_Model *cmd);
 
-struct CPG_Model * CPG_ModelCreate(struct CPG_Limb * limbs, size_t size);
 
 struct CPG_constants
 {
     // Core oscillator parameters
     float frequency_adaptation_rate;   // α - how fast it learns from feedback
-    
-    // Phase coupling (replaces inhibition)
-    float contralateral_coupling;      // K_contra - couples opposite limbs (typically ~1.0-2.0)
-    float ipsilateral_coupling;        // K_ipsi - couples same-side limbs (typically ~0.5-1.0)
-    
+        
     // Sensory feedback
     float ground_contact_gain;         // how much ground contact speeds/slows oscillator
     float hip_angle_gain;              // how much hip extension affects frequency
@@ -40,7 +47,7 @@ struct CPG_constants
     
     // Stability/smoothing
     float phase_coupling_strength;     // overall coupling multiplier
-    float frequency_bounds[2];         // [min_freq, max_freq] - prevent runaway
+    float frequency_bounds[2];         // [min_freq, max_freq] - prevent runaway (multipliers for target of group)
 };
 
 struct CPG_constants default_CPG_constants();
@@ -54,16 +61,22 @@ struct CPG_Model
 	double accumulator;
 	struct CPG_constants settings;
 	
-	const int16_t noOscilators;
-	const int16_t noSegments;
-	const int16_t noGroups;
-	const int16_t noNeurons;
+	const uint16_t noOscilators;
+	const uint16_t noSegments;
+	const uint16_t noGroups;
+	const uint16_t noGroupIndices;
 	
 	struct CPG_Oscilator *const oscilators;
 	struct CPG_Segment   *const segments;
 	struct CPG_Group     *const groups;
 	
 // feedback, per limb 
+// if true then use to set IK target, if false then we check against this to recalibrate speed 
+// (if stance swings faster than we expect adjust swing phase etc)
+// 0 is front, pi is back
+	int8_t *const cpg_state;
+	// by percentage of weight. 
+	// basically how close the center of mass is to us by barrycentric coordinates.
 	float *const contact_force;
 	float *const joint_cos;
 };
@@ -71,11 +84,7 @@ struct CPG_Model
 
 struct CPG_Oscilator
 {
-// if true then use to set IK target, if false then we check against this to recalibrate speed 
-// (if stance swings faster than we expect adjust swing phase etc)
-// 0 is front, pi is back
-	int8_t  cpg_state;
-	int8_t  root_id;
+	int16_t root_id;
 	int16_t limb_id;
 	
     float   phase;           // renamed from position - [0, 2π)
@@ -92,19 +101,25 @@ struct CPG_Oscilator
 // contralateral inhibition
 struct CPG_Segment
 {
-	int16_t first_oscilator;
-	int16_t last_oscilator;
+	uint8_t first_oscilator;
+	uint8_t last_oscilator;
+
+	bool enabled;
+		
+	// K_contra - couples opposite limbs (typically ~1.0-2.0)
+	float target_frequency;
+	float desired_phase_offset;
+    float contralateral_coupling; 
 };
 
 // ipsilateral inhibition
 struct CPG_Group
 {
-	int16_t * segment;
+	uint8_t * segment;
 	int32_t length;
 	
-	bool  enabled;
-	float group_target_hz;
-	float group_phase_offset;
+	bool  enabled;	
+    float ipsilateral_coupling;  // K_ipsi - couples same-side limbs (typically ~0.5-1.0)
 };
 
 #ifdef __cplusplus
