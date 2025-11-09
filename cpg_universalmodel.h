@@ -30,19 +30,23 @@ struct	CPG_ConstructionCommand
 	size_t ipsilateral_inhibition_groups_size; 
 };
 	
+// does one malloc so can just destroy with free
 struct CPG_Model * CPG_ModelCreate(const struct CPG_ConstructionCommand *cmd);
 // doesn't copy internal state only structure of model. 
 struct CPG_Model * CPG_ModelCopy(const struct CPG_Model *cmd);
+void CPG_ModelUpdate(struct CPG_Model *model, float dt) ;
 
 
 struct CPG_constants
 {
     // Core oscillator parameters
-    float frequency_adaptation_rate;   // α - how fast it learns from feedback
+    float frequency_adaptation_rate;   // α - how fast it learns from feedback (in number of cycles)
         
     // Sensory feedback
-    float ground_contact_gain;         // how much ground contact speeds/slows oscillator
-    float hip_angle_gain;              // how much hip extension affects frequency
+    float ground_contact_gain;         // how much ground contact speeds/slows oscillator (note: we may just kick our legs uselessly in the air!)
+    // (probably not going to be actual angle, b/c that means getting atan2 for each limb each frame)
+    // more likely: its being interpreted as a scotch yoke and we're getting 0-1 depending on where we are in the yoke.
+    float hip_angle_gain;              // how much hip extension affects frequency 
     float load_feedback_gain;          // how much leg loading affects phase
     
     // Stability/smoothing

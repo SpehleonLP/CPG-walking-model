@@ -1,5 +1,6 @@
 #include "cpg_universalmodel.h"
 #include <assert.h>
+#include <math.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -159,4 +160,171 @@ static struct CPG_Model * CPG_ModelAllocate(int no_limbs, int no_segments, int n
 	*(int8_t**)(&model->cpg_state) = (int8_t*)(group_indices_begin + total_group_items);
 	
 	return model;
+}
+
+// Helper to wrap phase to [0, 2π)
+static inline float wrap_phase(float phase) {
+    const float TWO_PI = 2.0f * M_PI;
+    while (phase >= TWO_PI) phase -= TWO_PI;
+    while (phase < 0.0f) phase += TWO_PI;
+    return phase;
+}
+
+// Helper to compute phase difference (shortest path on circle)
+static inline float phase_difference(float target, float current) {
+    float diff = target - current;
+    const float PI = M_PI;
+    if (diff > PI) diff -= 2.0f * PI;
+    if (diff < -PI) diff += 2.0f * PI;
+    return diff;
+}
+
+void CPG_ModelUpdate(struct CPG_Model *model, float dt) {
+    const float TWO_PI = 2.0f * M_PI;
+    const float PI = M_PI;
+    
+    // === PHASE 1: Compute target frequencies from sensory feedback ===
+    for (uint16_t i = 0; i < model->noOscilators; i++) {
+        struct CPG_Oscilator *osc = &model->oscilators[i];
+        
+        // Start with segment's base target frequency
+        int16_t seg_id = osc->root_id;
+        if (seg_id >= 0 && seg_id < model->noSegments) {
+            osc->target_frequency = model->segments[seg_id].target_frequency;
+        }
+        
+        // Adjust based on sensory feedback
+        float feedback_adjustment = 0.0f;
+        
+        // Ground contact: if we're touching ground, adjust frequency
+        // (speeds up or slows down based on whether we're ahead/behind expected)
+        if (model->contact_force[i] > 0.1f) {
+            feedback_adjustment += model->settings.ground_contact_gain * 
+                                   model->contact_force[i];
+        }
+        
+        // Hip angle feedback: joint_cos is like a scotch yoke position
+        // If leg is more extended (joint_cos near -1), we might want to speed up swing
+        feedback_adjustment += model->settings.hip_angle_gain * 
+                               (model->joint_cos[i] + 1.0f) * 0.5f;
+        
+        // Load feedback: affects frequency based on weight bearing
+        feedback_adjustment += model->settings.load_feedback_gain * 
+                               model->contact_force[i];
+        
+        osc->target_frequency += feedback_adjustment;
+        
+        // Clamp to bounds
+        if (seg_id >= 0 && seg_id < model->noSegments) {
+            float base_freq = model->segments[seg_id].target_frequency;
+            osc->target_frequency = fmaxf(osc->target_frequency, 
+                                         base_freq * model->settings.frequency_bounds[0]);
+            osc->target_frequency = fminf(osc->target_frequency, 
+                                         base_freq * model->settings.frequency_bounds[1]);
+        }
+    }
+    
+    // === PHASE 2: Compute coupling forces ===
+    float *phase_coupling = calloc(model->noOscilators, sizeof(float));
+    
+    // Contralateral coupling (segment level - opposite limbs)
+    for (uint16_t s = 0; s < model->noSegments; s++) {
+        struct CPG_Segment *seg = &model->segments[s];
+        if (!seg->enabled) continue;
+        
+        // Find pairs within this segment and couple them
+        for (uint8_t i = seg->first_oscilator; i <= seg->last_oscilator; i++) {
+            for (uint8_t j = i + 1; j <= seg->last_oscilator; j++) {
+                struct CPG_Oscilator *osc_i = &model->oscilators[i];
+                struct CPG_Oscilator *osc_j = &model->oscilators[j];
+                
+                // Desired phase relationship (typically π for contralateral)
+                float desired_diff = seg->desired_phase_offset;
+                float actual_diff = phase_difference(osc_j->phase, osc_i->phase);
+                float coupling_force = seg->contralateral_coupling * 
+                                      sinf(desired_diff - actual_diff);
+                
+                phase_coupling[i] += coupling_force * model->settings.phase_coupling_strength;
+                phase_coupling[j] -= coupling_force * model->settings.phase_coupling_strength;
+            }
+        }
+    }
+    
+    // Ipsilateral coupling (group level - same-side limbs)
+    for (uint16_t g = 0; g < model->noGroups; g++) {
+        struct CPG_Group *group = &model->groups[g];
+        if (!group->enabled) continue;
+        
+        // Couple segments within this group
+        for (int32_t si = 0; si < group->length; si++) {
+            for (int32_t sj = si + 1; sj < group->length; sj++) {
+                uint8_t seg_i = group->segment[si];
+                uint8_t seg_j = group->segment[sj];
+                
+                if (seg_i >= model->noSegments || seg_j >= model->noSegments) continue;
+                
+                struct CPG_Segment *s_i = &model->segments[seg_i];
+                struct CPG_Segment *s_j = &model->segments[seg_j];
+                
+                // Couple representative oscillators from each segment
+                if (s_i->first_oscilator < model->noOscilators && 
+                    s_j->first_oscilator < model->noOscilators) {
+                    
+                    uint8_t osc_i_idx = s_i->first_oscilator;
+                    uint8_t osc_j_idx = s_j->first_oscilator;
+                    
+                    struct CPG_Oscilator *osc_i = &model->oscilators[osc_i_idx];
+                    struct CPG_Oscilator *osc_j = &model->oscilators[osc_j_idx];
+                    
+                    // Ipsilateral limbs typically have phase offset (like 0 or π/2)
+                    float actual_diff = phase_difference(osc_j->phase, osc_i->phase);
+                    float coupling_force = group->ipsilateral_coupling * sinf(-actual_diff);
+                    
+                    phase_coupling[osc_i_idx] += coupling_force * model->settings.phase_coupling_strength;
+                    phase_coupling[osc_j_idx] -= coupling_force * model->settings.phase_coupling_strength;
+                }
+            }
+        }
+    }
+    
+    // === PHASE 3: Integrate oscillators ===
+    for (uint16_t i = 0; i < model->noOscilators; i++) {
+        struct CPG_Oscilator *osc = &model->oscilators[i];
+        
+        // Store last frame phase for cycle detection
+        osc->phase_last_frame = osc->phase;
+        
+        // Adaptive frequency (exponential smoothing toward target)
+        float freq_delta = (osc->target_frequency - osc->frequency) * 
+                          model->settings.frequency_adaptation_rate * dt;
+        osc->frequency += freq_delta;
+        
+        // Phase velocity includes base frequency + coupling
+        osc->phase_velocity = TWO_PI * osc->frequency + phase_coupling[i];
+        
+        // Integrate phase
+        osc->phase += osc->phase_velocity * dt;
+        osc->phase = wrap_phase(osc->phase);
+        
+        // Detect cycle completion
+        if (osc->phase < osc->phase_last_frame) {
+            osc->cycles_this_frame = 1.0f;
+        } else {
+            osc->cycles_this_frame = 0.0f;
+        }
+        
+        // Update state based on phase
+        if (model->cpg_state[i] != CPG_DISABLED) {
+            if (osc->phase < PI) {
+                model->cpg_state[i] = CPG_STANCE;
+            } else {
+                model->cpg_state[i] = CPG_SWING;
+            }
+        }
+    }
+    
+    free(phase_coupling);
+    
+    // Update global accumulator
+    model->accumulator += dt;
 }
