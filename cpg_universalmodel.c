@@ -5,6 +5,10 @@
 #include <stdlib.h>
 #include <stddef.h>
 
+#ifndef M_PI
+#define M_PI 3.14159265358
+#endif
+
 struct CPG_constants default_CPG_constants()
 {
 	struct CPG_constants defaults = {
